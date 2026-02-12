@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
 	"github.com/prakyathpnayak/roognis/internal/middleware"
 	"github.com/prakyathpnayak/roognis/internal/models"
 	"github.com/prakyathpnayak/roognis/internal/service"
@@ -134,6 +135,44 @@ func (h *InferenceHandler) Conversations(w http.ResponseWriter, r *http.Request)
 	}
 
 	writeJSON(w, http.StatusOK, conversations)
+}
+
+// ConversationMessages handles GET /api/v1/conversations/{id}/messages.
+func (h *InferenceHandler) ConversationMessages(w http.ResponseWriter, r *http.Request) {
+	user := middleware.UserFromContext(r.Context())
+	if user == nil {
+		writeError(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	conversationIDRaw := r.PathValue("id")
+	if conversationIDRaw == "" {
+		writeError(w, "conversation id is required", http.StatusBadRequest)
+		return
+	}
+
+	conversationID, err := uuid.Parse(conversationIDRaw)
+	if err != nil {
+		writeError(w, "invalid conversation id", http.StatusBadRequest)
+		return
+	}
+
+	messages, err := h.orchestrator.ListConversationMessages(r.Context(), conversationID, user.ID)
+	if err != nil {
+		if errors.Is(err, service.ErrConversationForbidden) {
+			writeError(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if errors.Is(err, service.ErrConversationNotFound) {
+			writeError(w, "conversation not found", http.StatusNotFound)
+			return
+		}
+		slog.Error("inference.list_conversation_messages_error", "error", err, "user_id", user.ID, "conversation_id", conversationID)
+		writeError(w, "failed to list conversation messages", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, messages)
 }
 
 func validatePrompt(prompt string) error {

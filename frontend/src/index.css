@@ -86,3 +86,41 @@ body {
   margin: 0;
   overflow: hidden;
 }
+
+.markdown-body .hljs {
+  color: var(--foreground);
+}
+
+.markdown-body .hljs-comment,
+.markdown-body .hljs-quote {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+.markdown-body .hljs-keyword,
+.markdown-body .hljs-selector-tag,
+.markdown-body .hljs-subst,
+.markdown-body .hljs-name,
+.markdown-body .hljs-attr,
+.markdown-body .hljs-section,
+.markdown-body .hljs-title {
+  color: var(--primary);
+}
+
+.markdown-body .hljs-string,
+.markdown-body .hljs-type,
+.markdown-body .hljs-built_in,
+.markdown-body .hljs-literal,
+.markdown-body .hljs-number,
+.markdown-body .hljs-symbol,
+.markdown-body .hljs-bullet,
+.markdown-body .hljs-template-tag,
+.markdown-body .hljs-template-variable {
+  color: var(--foreground);
+}
+
+.markdown-body .hljs-addition,
+.markdown-body .hljs-deletion {
+  color: var(--foreground);
+  opacity: 0.8;
+}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/prakyathpnayak/roognis/internal/models"
 )
 
 // Cache wraps Redis for response caching.
@@ -27,9 +28,37 @@ func NewCache(rdb *redis.Client, ttl time.Duration) *Cache {
 	return &Cache{rdb: rdb, ttl: ttl}
 }
 
+type semanticCacheFingerprint struct {
+	UserID      string              `json:"user_id"`
+	Model       string              `json:"model"`
+	Temperature float64             `json:"temperature"`
+	MaxTokens   int                 `json:"max_tokens"`
+	Messages    []models.LLMMessage `json:"messages"`
+}
+
+// SemanticContextHash returns a deterministic cache key from full LLM context.
+// Includes user identity, model parameters, and full message sequence so cache
+// hits only occur for semantically equivalent contexts.
+func SemanticContextHash(messages []models.LLMMessage, model, userID string, temperature float64, maxTokens int) (string, error) {
+	fingerprint := semanticCacheFingerprint{
+		UserID:      userID,
+		Model:       model,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
+		Messages:    messages,
+	}
+
+	data, err := json.Marshal(fingerprint)
+	if err != nil {
+		return "", fmt.Errorf("cache.semantic_context_hash: marshal: %w", err)
+	}
+
+	h := sha256.Sum256(data)
+	return fmt.Sprintf("cache:inference:%x", h), nil
+}
+
 // SemanticHash returns a deterministic cache key for an inference request.
-// M4+M5 fix: Includes model, prompt, temperature, max_tokens, and userID
-// to prevent cross-user and cross-parameter cache collisions.
+// Kept for backward compatibility in tests and non-context use cases.
 func SemanticHash(prompt, model, userID string, temperature float64, maxTokens int) string {
 	raw := fmt.Sprintf("%s:%s:%s:%.2f:%d", userID, model, prompt, temperature, maxTokens)
 	h := sha256.Sum256([]byte(raw))

@@ -25,6 +25,17 @@ export interface Conversation {
   updated_at: string
 }
 
+export interface ConversationMessage {
+  id: string
+  conversation_id: string
+  role: "user" | "assistant" | "system"
+  content: string
+  token_count?: number
+  model_used?: string
+  latency_ms?: number
+  created_at: string
+}
+
 export interface InferenceRequest {
   prompt: string
   conversation_id?: string

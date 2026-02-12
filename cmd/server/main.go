@@ -111,6 +111,7 @@ func main() {
 	protectedMux.HandleFunc("GET /api/v1/auth/me", authHandler.Me)
 	protectedMux.HandleFunc("POST /api/v1/inference/complete", inferenceHandler.Complete)
 	protectedMux.HandleFunc("GET /api/v1/conversations", inferenceHandler.Conversations)
+	protectedMux.HandleFunc("GET /api/v1/conversations/{id}/messages", inferenceHandler.ConversationMessages)
 
 	// Wire protected routes through auth middleware
 	mux.Handle("/api/v1/", authMiddleware(protectedMux))

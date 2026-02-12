@@ -1,5 +1,6 @@
 import type {
   Conversation,
+  ConversationMessage,
   InferenceRequest,
   InferenceResponse,
   TokenResponse,
@@ -60,6 +61,13 @@ export async function me(token: string): Promise<User> {
 
 export async function listConversations(token: string): Promise<Conversation[]> {
   return request<Conversation[]>("/api/v1/conversations", {
+    method: "GET",
+    headers: { Authorization: `Bearer ${token}` },
+  })
+}
+
+export async function listConversationMessages(token: string, conversationId: string): Promise<ConversationMessage[]> {
+  return request<ConversationMessage[]>(`/api/v1/conversations/${conversationId}/messages`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
   })

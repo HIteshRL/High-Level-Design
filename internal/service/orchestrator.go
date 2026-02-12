@@ -58,7 +58,10 @@ func (o *Orchestrator) Complete(ctx context.Context, req *models.InferenceReques
 		return nil, err
 	}
 
-	// 3. Check cache
+	// 3. Inject RAG context
+	messages = o.ctxInj.Inject(ctx, messages)
+
+	// 4. Check cache
 	model := req.Model
 	if model == "" {
 		model = o.llm.cfg.LLMModel
@@ -71,7 +74,11 @@ func (o *Orchestrator) Complete(ctx context.Context, req *models.InferenceReques
 	if req.MaxTokens != nil {
 		maxTok = *req.MaxTokens
 	}
-	cacheKey := SemanticHash(req.Prompt, model, userID.String(), temp, maxTok)
+	cacheKey, hashErr := SemanticContextHash(messages, model, userID.String(), temp, maxTok)
+	if hashErr != nil {
+		slog.Warn("orchestrator.cache_hash_error", "error", hashErr)
+		cacheKey = SemanticHash(req.Prompt, model, userID.String(), temp, maxTok)
+	}
 
 	var cachedResp models.InferenceResponse
 	if found, _ := o.cache.GetJSON(ctx, cacheKey, &cachedResp); found {
@@ -81,9 +88,6 @@ func (o *Orchestrator) Complete(ctx context.Context, req *models.InferenceReques
 		cachedResp.LatencyMs = float64(time.Since(start).Milliseconds())
 		return &cachedResp, nil
 	}
-
-	// 4. Inject RAG context
-	messages = o.ctxInj.Inject(ctx, messages)
 
 	// 5. Call LLM
 	var opts []RequestOption
@@ -190,6 +194,27 @@ func (o *Orchestrator) ListConversations(ctx context.Context, userID uuid.UUID) 
 		return nil, fmt.Errorf("orchestrator: list conversations: %w", err)
 	}
 	return conversations, nil
+}
+
+// ListConversationMessages returns all messages for a conversation owned by the user.
+func (o *Orchestrator) ListConversationMessages(ctx context.Context, conversationID, userID uuid.UUID) ([]models.Message, error) {
+	conv, err := o.pool.GetConversation(ctx, conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("orchestrator: get conversation: %w", err)
+	}
+	if conv == nil {
+		return nil, ErrConversationNotFound
+	}
+	if conv.UserID != userID {
+		return nil, ErrConversationForbidden
+	}
+
+	msgs, err := o.pool.GetConversationMessages(ctx, conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("orchestrator: get conversation messages: %w", err)
+	}
+
+	return msgs, nil
 }
 
 // resolveConversation returns an existing conversation ID or creates a new one.

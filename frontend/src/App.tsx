@@ -3,12 +3,29 @@ import { Toaster, toast } from "sonner"
 
 import { AuthPanel } from "@/components/auth-panel"
 import { ChatPanel } from "@/components/chat-panel"
-import { ApiError, complete, listConversations, login, me, register } from "@/lib/api"
-import type { Conversation, User } from "@/lib/types"
+import { ApiError, complete, listConversationMessages, listConversations, login, me, register } from "@/lib/api"
+import type { Conversation, ConversationMessage, User } from "@/lib/types"
 
-type ChatMessage = { role: "user" | "assistant"; content: string }
+type ChatMessage = {
+  id: string
+  role: "user" | "assistant"
+  content: string
+  createdAt: string
+  model?: string
+  latencyMs?: number
+  cached?: boolean
+}
 
 const TOKEN_KEY = "roognis.frontend.token"
+const THEME_KEY = "roognis.frontend.theme"
+
+type ThemeMode = "light" | "dark"
+
+interface InferenceSettings {
+  model: string
+  temperature: number
+  maxTokens: number
+}
 
 function App() {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY))
@@ -17,8 +34,42 @@ function App() {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [busy, setBusy] = useState(false)
+  const [historyBusy, setHistoryBusy] = useState(false)
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    const stored = localStorage.getItem(THEME_KEY)
+    return stored === "light" || stored === "dark" ? stored : "dark"
+  })
+  const [settings, setSettings] = useState<InferenceSettings>({
+    model: "qwen2.5:0.5b",
+    temperature: 0.7,
+    maxTokens: 1024,
+  })
 
   const isAuthenticated = useMemo(() => Boolean(token && user), [token, user])
+
+  function normalizeConversationMessages(persisted: ConversationMessage[]): ChatMessage[] {
+    return persisted
+      .filter((message): message is ConversationMessage & { role: "user" | "assistant" } => message.role === "user" || message.role === "assistant")
+      .map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        createdAt: message.created_at,
+        model: message.model_used,
+        latencyMs: message.latency_ms,
+        cached: false,
+      }))
+  }
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === "dark") {
+      root.classList.add("dark")
+    } else {
+      root.classList.remove("dark")
+    }
+    localStorage.setItem(THEME_KEY, theme)
+  }, [theme])
 
   useEffect(() => {
     if (!token) return
@@ -32,6 +83,14 @@ function App() {
         if (cancelled) return
         setUser(currentUser)
         setConversations(conversationList)
+
+        if (conversationList.length > 0) {
+          const nextConversationID = conversationList[0].id
+          setActiveConversationId(nextConversationID)
+          const persisted = await listConversationMessages(authToken, nextConversationID)
+          if (cancelled) return
+          setMessages(normalizeConversationMessages(persisted))
+        }
       } catch (error) {
         if (cancelled) return
         handleError(error)
@@ -97,21 +156,53 @@ function App() {
     }
   }
 
+  async function loadConversationMessages(conversationId: string) {
+    if (!token) return
+    setHistoryBusy(true)
+    try {
+      const persisted = await listConversationMessages(token, conversationId)
+      setMessages(normalizeConversationMessages(persisted))
+    } catch (error) {
+      handleError(error)
+      setMessages([])
+    } finally {
+      setHistoryBusy(false)
+    }
+  }
+
   async function handleSend(prompt: string, conversationId: string | null) {
     if (!token) {
       throw new Error("Missing authentication token")
     }
 
     setBusy(true)
-    setMessages((previous) => [...previous, { role: "user", content: prompt }])
+    const userMessageId = crypto.randomUUID()
+    setMessages((previous) => [
+      ...previous,
+      { id: userMessageId, role: "user", content: prompt, createdAt: new Date().toISOString() },
+    ])
 
     try {
       const response = await complete(token, {
         prompt,
         conversation_id: conversationId ?? undefined,
+        model: settings.model,
+        temperature: settings.temperature,
+        max_tokens: settings.maxTokens,
       })
 
-      setMessages((previous) => [...previous, { role: "assistant", content: response.content }])
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: response.id,
+          role: "assistant",
+          content: response.content,
+          createdAt: new Date().toISOString(),
+          model: response.model,
+          latencyMs: response.latency_ms,
+          cached: response.cached,
+        },
+      ])
       setActiveConversationId(response.conversation_id)
       await refreshConversations()
 
@@ -152,15 +243,25 @@ function App() {
           activeConversationId={activeConversationId}
           messages={messages}
           busy={busy}
+          historyBusy={historyBusy}
+          theme={theme}
+          settings={settings}
           onSelectConversation={(id) => {
+            if (!id) {
+              setActiveConversationId(null)
+              setMessages([])
+              return
+            }
             setActiveConversationId(id)
-            setMessages([])
+            void loadConversationMessages(id)
           }}
+          onThemeChange={setTheme}
+          onSettingsChange={setSettings}
           onSend={handleSend}
           onLogout={hardLogout}
         />
       ) : (
-        <AuthPanel onLogin={handleLogin} onRegister={handleRegister} busy={busy} />
+        <AuthPanel onLogin={handleLogin} onRegister={handleRegister} busy={busy} theme={theme} onThemeChange={setTheme} />
       )}
       <Toaster position="top-right" richColors />
     </>
