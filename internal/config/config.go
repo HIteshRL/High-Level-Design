@@ -69,7 +69,7 @@ func Load() *Config {
 
 		RateLimitRPM: envOrDefaultInt("RATE_LIMIT_RPM", 60),
 
-		CORSOrigins: strings.Split(envOrDefault("CORS_ORIGINS", "http://localhost:3000,http://localhost:8080"), ","),
+		CORSOrigins: strings.Split(envOrDefault("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8080"), ","),
 	}
 }
 

@@ -1,8 +1,8 @@
 # Roognis — Walking Skeleton Progress
 
 > **Last updated:** 13 February 2026
-> **Status:** Walking skeleton complete — local Ollama inference enabled via Docker Compose
-> **Build/Test:** `go build ✅` | `go vet ✅` | `go test ✅`
+> **Status:** Walking skeleton + frontend complete — local Ollama inference enabled via Docker Compose
+> **Build/Test:** `go build ✅` | `go vet ✅` | `go test ✅` | `frontend npm run lint ✅` | `frontend npm run build ✅`
 
 ---
 
@@ -47,6 +47,40 @@ External Clients
 | Streaming | Server-Sent Events (SSE) |
 | Container | Multi-stage Docker build (alpine), Docker Compose (Postgres + Redis + Ollama) |
 | IDs | UUID v4 (`google/uuid`) |
+
+---
+
+## Frontend Milestone (New)
+
+A complete frontend has been added using React + TypeScript + Tailwind + shadcn-style component patterns.
+
+### Frontend Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Framework | React 19 + TypeScript + Vite |
+| Styling | Tailwind CSS v4 + tokenized CSS variables |
+| UI Primitives | Radix + shadcn-style reusable components |
+| State | Local React state with typed API client |
+| Notifications | Sonner toasts |
+
+### Frontend Features Implemented
+
+- Register + login UX with validation and semantic forms.
+- Token-based authenticated session bootstrap (`/auth/me`).
+- Conversations list + selection (`/api/v1/conversations`).
+- Prompt completion workspace (`/api/v1/inference/complete`).
+- Loading/error/cached-response feedback.
+- Mobile fallback controls for conversation switching + logout.
+
+### Frontend Location
+
+- `frontend/` (standalone Vite app)
+- Key docs created:
+  - `frontend/TODO.md` (detailed execution plan)
+  - `frontend/SELF_PROMPT.md` (accuracy checklist)
+  - `frontend/DEVILS_ADVOCATE.md` (design critique + convergence)
+  - `frontend/skills/*.skill.md` (implementation skill notes)
 
 ---
 
@@ -146,6 +180,7 @@ After a devil's advocate review, the following issues were identified and fixed:
 ### High (Fixed)
 - **Credential logging removed** — Database DSN and Redis URL no longer logged in plaintext
 - **Rate limiter hardened** — Uses `RemoteAddr` only; no blind trust of `X-Forwarded-For`
+- **CORS alignment for frontend dev** — Added `http://localhost:5173` to allowed origins in env + config defaults
 
 ### Medium (Fixed)
 - **Cache scoped per user** — Cache key includes userID + model + prompt + temperature + maxTokens (no cross-user or cross-parameter collisions)
