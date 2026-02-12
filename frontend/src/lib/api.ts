@@ -67,7 +67,8 @@ export async function listConversations(token: string): Promise<Conversation[]> 
 }
 
 export async function listConversationMessages(token: string, conversationId: string): Promise<ConversationMessage[]> {
-  return request<ConversationMessage[]>(`/api/v1/conversations/${conversationId}/messages`, {
+  const query = new URLSearchParams({ conversation_id: conversationId })
+  return request<ConversationMessage[]>(`/api/v1/conversation-messages?${query.toString()}`, {
     method: "GET",
     headers: { Authorization: `Bearer ${token}` },
   })
