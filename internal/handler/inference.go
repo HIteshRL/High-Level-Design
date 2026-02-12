@@ -4,8 +4,10 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"unicode/utf8"
 
 	"github.com/prakyathpnayak/roognis/internal/middleware"
 	"github.com/prakyathpnayak/roognis/internal/models"
@@ -45,9 +47,8 @@ func (h *InferenceHandler) Complete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// L9 fix: Enforce prompt length limit (32K chars)
-	if len(req.Prompt) > 32000 {
-		writeError(w, "prompt exceeds maximum length of 32000 characters", http.StatusBadRequest)
+	if err := validatePrompt(req.Prompt); err != nil {
+		writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -62,6 +63,14 @@ func (h *InferenceHandler) Complete(w http.ResponseWriter, r *http.Request) {
 func (h *InferenceHandler) handleComplete(w http.ResponseWriter, r *http.Request, req *models.InferenceRequest, user *models.User) {
 	resp, err := h.orchestrator.Complete(r.Context(), req, user.ID)
 	if err != nil {
+		if errors.Is(err, service.ErrConversationForbidden) {
+			writeError(w, "forbidden", http.StatusForbidden)
+			return
+		}
+		if errors.Is(err, service.ErrConversationNotFound) {
+			writeError(w, "conversation not found", http.StatusNotFound)
+			return
+		}
 		slog.Error("inference.complete_error", "error", err, "user_id", user.ID)
 		writeError(w, "inference failed: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -92,6 +101,16 @@ func (h *InferenceHandler) handleStream(w http.ResponseWriter, r *http.Request, 
 	})
 
 	if streamErr != nil {
+		if errors.Is(streamErr, service.ErrConversationForbidden) {
+			sse.WriteError("forbidden")
+			sse.WriteDone()
+			return
+		}
+		if errors.Is(streamErr, service.ErrConversationNotFound) {
+			sse.WriteError("conversation not found")
+			sse.WriteDone()
+			return
+		}
 		slog.Error("inference.stream_error", "error", streamErr, "user_id", user.ID)
 		sse.WriteError(streamErr.Error())
 	}
@@ -107,8 +126,19 @@ func (h *InferenceHandler) Conversations(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// The orchestrator holds a reference to the pool; we'll access it via a lightweight query.
-	// For the walking skeleton, we reuse the pool through the orchestrator's exposed method.
-	// This is a pragmatic shortcut — a proper Conversations handler would have its own service.
-	writeJSON(w, http.StatusOK, map[string]string{"message": "conversations list - implement with dedicated service"})
+	conversations, err := h.orchestrator.ListConversations(r.Context(), user.ID)
+	if err != nil {
+		slog.Error("inference.list_conversations_error", "error", err, "user_id", user.ID)
+		writeError(w, "failed to list conversations", http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, conversations)
+}
+
+func validatePrompt(prompt string) error {
+	if utf8.RuneCountInString(prompt) > 32000 {
+		return errors.New("prompt exceeds maximum length of 32000 characters")
+	}
+	return nil
 }

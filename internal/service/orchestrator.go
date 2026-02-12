@@ -9,6 +9,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -16,6 +17,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/prakyathpnayak/roognis/internal/db"
 	"github.com/prakyathpnayak/roognis/internal/models"
+)
+
+var (
+	ErrConversationNotFound  = errors.New("conversation not found")
+	ErrConversationForbidden = errors.New("not authorized to access this conversation")
 )
 
 // Orchestrator is the inference pipeline conductor.
@@ -154,6 +160,10 @@ func (o *Orchestrator) StreamComplete(ctx context.Context, req *models.Inference
 	if req.MaxTokens != nil {
 		opts = append(opts, WithMaxTokens(*req.MaxTokens))
 	}
+	selectedModel := o.llm.cfg.LLMModel
+	if req.Model != "" {
+		selectedModel = req.Model
+	}
 
 	// 5. Stream from LLM, forwarding chunks to caller
 	var fullContent string
@@ -168,9 +178,18 @@ func (o *Orchestrator) StreamComplete(ctx context.Context, req *models.Inference
 	}
 
 	// 6. Persist after stream completes
-	o.persistMessages(ctx, conversationID, req.Prompt, fullContent, o.llm.cfg.LLMModel, 0, 0)
+	o.persistMessages(ctx, conversationID, req.Prompt, fullContent, selectedModel, 0, 0)
 
 	return nil
+}
+
+// ListConversations returns conversations for the given user.
+func (o *Orchestrator) ListConversations(ctx context.Context, userID uuid.UUID) ([]models.Conversation, error) {
+	conversations, err := o.pool.ListConversations(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("orchestrator: list conversations: %w", err)
+	}
+	return conversations, nil
 }
 
 // resolveConversation returns an existing conversation ID or creates a new one.
@@ -183,10 +202,11 @@ func (o *Orchestrator) resolveConversation(ctx context.Context, convID *uuid.UUI
 		if conv != nil {
 			// C3 fix: Explicit ownership check — never silently fall through
 			if conv.UserID != userID {
-				return uuid.Nil, fmt.Errorf("orchestrator: not authorized to access this conversation")
+				return uuid.Nil, ErrConversationForbidden
 			}
 			return conv.ID, nil
 		}
+		return uuid.Nil, ErrConversationNotFound
 	}
 
 	// Create a new conversation
