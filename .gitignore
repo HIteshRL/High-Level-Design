@@ -1,0 +1,24 @@
+# Binaries
+bin/
+*.exe
+
+# Go
+vendor/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage.out
+coverage.html
+server
