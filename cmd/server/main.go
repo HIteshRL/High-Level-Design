@@ -93,6 +93,7 @@ func main() {
 	healthHandler := handler.NewHealth(pool, cache)
 	authHandler := handler.NewAuthHandler(authSvc, cfg)
 	inferenceHandler := handler.NewInferenceHandler(orchestrator)
+	attachmentHandler := handler.NewAttachmentHandler()
 
 	// ── Middleware ───────────────────────────────────────────────────
 	rateLimiter := middleware.NewRateLimiter(rdb, cfg.RateLimitRPM)
@@ -113,6 +114,18 @@ func main() {
 	protectedMux.HandleFunc("GET /api/v1/conversations", inferenceHandler.Conversations)
 	protectedMux.HandleFunc("GET /api/v1/conversations/{id}/messages", inferenceHandler.ConversationMessages)
 	protectedMux.HandleFunc("GET /api/v1/conversation-messages", inferenceHandler.ConversationMessagesByQuery)
+	protectedMux.HandleFunc("GET /api/v1/architecture/attachment-points", attachmentHandler.Catalog)
+	protectedMux.HandleFunc("POST /api/v1/image/jobs", attachmentHandler.SubmitImageJob)
+	protectedMux.HandleFunc("GET /api/v1/image/jobs/{id}", attachmentHandler.NotImplemented)
+	protectedMux.HandleFunc("POST /api/v1/video/jobs", attachmentHandler.SubmitVideoJob)
+	protectedMux.HandleFunc("GET /api/v1/video/jobs/{id}", attachmentHandler.NotImplemented)
+	protectedMux.HandleFunc("POST /api/v1/rag/documents", attachmentHandler.NotImplemented)
+	protectedMux.HandleFunc("POST /api/v1/rag/search", attachmentHandler.NotImplemented)
+	protectedMux.HandleFunc("POST /api/v1/psychographic/events", attachmentHandler.NotImplemented)
+	protectedMux.HandleFunc("GET /api/v1/psychographic/persona/{user_id}", attachmentHandler.NotImplemented)
+	protectedMux.HandleFunc("POST /api/v1/quiz/generate", attachmentHandler.NotImplemented)
+	protectedMux.HandleFunc("POST /api/v1/quiz/attempts", attachmentHandler.NotImplemented)
+	protectedMux.HandleFunc("GET /api/v1/analytics/kpi", attachmentHandler.NotImplemented)
 
 	// Wire protected routes through auth middleware
 	mux.Handle("/api/v1/", authMiddleware(protectedMux))
